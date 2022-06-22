@@ -35,30 +35,23 @@ class _matmul(node):
 
     def constructor(self):
         M, K, N = self.M, self.K, self.N
-        def get_dim_args(dims):
-            dim_args = []
-            for dim in dims:
-                dim_args.append(torch._C._te.DimArg(dim, 'i' + str(len(dim_args))))
-            return dim_args
- 
         (MM, KK, NN) = [torch._C._te.ExprHandle.int(x) for x in [M, K, N]]
- 
         dtype = torch._C._te.Dtype.Float
-        X = torch._C._te.Placeholder('X', dtype, [MM, KK])
-        Y = torch._C._te.Placeholder('Y', dtype, [KK, NN])
- 
+        X = torch._C._te.BufHandle('X', [MM, KK], dtype)
+        Y = torch._C._te.BufHandle('Y', [KK, NN], dtype)
+
         def compute(dims):
-            m, n, k = dims[0], dims[1], dims[2]                                                                                                           
+            m, n, k = dims[0], dims[1], dims[2]
             return X.load([m, k]) * Y.load([k, n])
- 
+
         Z = torch._C._te.Reduce(
              'Z',
-             get_dim_args([MM, NN]),
+             [MM, NN],
              torch._C._te.Sum(),
              compute,
-             get_dim_args([KK]),
+             [KK],
              )
- 
+
         self.X, self.Y, self.Z = X, Y, Z
         self.loopnest = torch._C._te.LoopNest([Z])
 
@@ -66,7 +59,7 @@ class _matmul(node):
         xfactor, yfactor = cfg['xfactor'], cfg['yfactor']
         if xfactor % 2 != 0 or yfactor % 2 != 0:
             return
-        
+
         if self.verbose is True:
             stmt = self.loopnest.root_stmt()
             print(f"Original Stmt:\n{stmt}")
@@ -86,10 +79,10 @@ class _matmul(node):
         # split xloop and yloop by xfactor, yfactor
         xinner, xouter, yinner, youter = None, None, None, None
         if yloop and yfactor > 1 and yfactor < self.N:
-            youter, yinner, _ = self.loopnest.split_with_tail(yloop, yfactor)
+            youter, yinner = self.loopnest.split_with_tail(yloop, yfactor)
         if xloop and xfactor > 1 and xfactor < self.M:
-            xouter, xinner, _ = self.loopnest.split_with_tail(xloop, xfactor)
- 
+            xouter, xinner = self.loopnest.split_with_tail(xloop, xfactor)
+
         if self.verbose is True:
             stmt = self.loopnest.root_stmt()
             print(f"After split [xfactor {xfactor}, yfactor {yfactor}]:\n{stmt}")
@@ -99,7 +92,7 @@ class _matmul(node):
         if xinner and youter:
             xinner, youter = loops[1], loops[2]
             self.loopnest.reorder(xinner, youter)
-            if kloop:    
+            if kloop:
                 yinner, kloop = loops[3], loops[4]
                 self.loopnest.reorder(kloop, yinner)
                 loops = self.loopnest.get_loops_for(self.Z)
@@ -118,9 +111,9 @@ class _matmul(node):
             else:
                 yinner, kloop = loops[1], loops[2]
             self.loopnest.reorder(yinner, kloop)
- 
+
         self.loopnest.prepare_for_codegen()
         stmt = torch._C._te.simplify(self.loopnest.root_stmt())
         if self.verbose is True:
             print(f"After reorder [xo, yo, k, xi, yi]:\n{stmt}")
-        self.codegen = torch._C._te.construct_codegen('llvm', stmt, [torch._C._te.BufferArg(x) for x in [self.X, self.Y, self.Z]])                
+        self.codegen = torch._C._te.construct_codegen('llvm', stmt, [torch._C._te.BufferArg(x) for x in [self.X, self.Y, self.Z]])
