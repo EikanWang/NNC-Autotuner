@@ -18,7 +18,7 @@ from .operators.matmul import _matmul
 from .operators.convolution import _convolution
 
 import nnctuner.utils
-from .utils import kernel_arena_scope, Once
+from .utils import Once
 
 log = logging.getLogger(__name__)
 stats = Counter()

@@ -23,7 +23,6 @@ from opentuner.search.manipulator import PermutationParameter
 
 from .operators.matmul import _matmul
 from .operators.convolution import _convolution
-from .utils import kernel_arena_scope
 
 log = logging.getLogger(__name__)
 REPEAT = 5
@@ -136,8 +135,7 @@ def main(args):
     try:
         multiprocessing.set_start_method("spawn")
         opentuner.init_logging()
-        with kernel_arena_scope():
-            autoTuner.main(parser.parse_args(args))
+        autoTuner.main(parser.parse_args(args))
     finally:
         shutil.rmtree("./bins")
 

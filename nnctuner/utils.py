@@ -10,13 +10,6 @@ from math import sqrt
 
 log = logging.getLogger(__name__)
 
-class kernel_arena_scope(object):
-    def __enter__(self):
-        self.scope = torch._C._te.KernelScope()
-
-    def __exit__(self, typ, val, traceback):
-        self.scope = None
-
 class Once(set):
     def __call__(self, *x):
         return x not in self and (self.add(x) or True)
@@ -36,6 +29,6 @@ def divisors(n):
         if n % i == 0:
             ret.append(i)
             ret.append(n//i)
-            
+
     return ret
-        
+
